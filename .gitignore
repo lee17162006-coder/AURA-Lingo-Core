@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+# Custom AURA-Lingo Rules
+.env
+*.key
+assets/audio/*.mp3
