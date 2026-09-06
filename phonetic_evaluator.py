@@ -1,7 +1,7 @@
 import os
 import torch
 import torchaudio
-from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
+from transformers import Wav2Vec2ForCTC, Wav2Vec2FeatureExtractor, Wav2Vec2CTCTokenizer
 from dotenv import load_dotenv
 
 # Tải biến môi trường từ file .env
@@ -11,7 +11,14 @@ class PhoneticEvaluator:
     def __init__(self, model_name="facebook/wav2vec2-xlsr-53-espeak-cv-ft"):
         """Khởi tạo mô hình Wav2Vec2 chấm điểm IPA"""
         print("Đang tải mô hình Wav2Vec2...")
-        self.processor = Wav2Vec2Processor.from_pretrained(model_name)
+        self.tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(model_name)
+        self.feature_extractor = Wav2Vec2FeatureExtractor(
+            feature_size=1, 
+            sampling_rate=16000, 
+            padding_value=0.0, 
+            do_normalize=True, 
+            return_attention_mask=False
+        )
         self.model = Wav2Vec2ForCTC.from_pretrained(model_name)
         self.model.eval()
         print("Mô hình Wav2Vec2 đã sẵn sàng!")
@@ -27,12 +34,12 @@ class PhoneticEvaluator:
             resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
             waveform = resampler(waveform)
 
-        input_values = self.processor(waveform.squeeze().numpy(), return_tensors="pt", sampling_rate=16000).input_values
+        input_values = self.feature_extractor(waveform.squeeze().numpy(), return_tensors="pt", sampling_rate=16000).input_values
         with torch.no_grad():
             logits = self.model(input_values).logits
 
         predicted_ids = torch.argmax(logits, dim=-1)
-        predicted_ipa = self.processor.batch_decode(predicted_ids)[0]
+        predicted_ipa = self.tokenizer.batch_decode(predicted_ids)[0]
 
         is_matched = predicted_ipa.strip() == target_ipa.strip()
         
