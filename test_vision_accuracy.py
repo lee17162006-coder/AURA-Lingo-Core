@@ -52,13 +52,15 @@ for idx, img_path in enumerate(image_paths, 1):
     
     success = False
     retries = 0
-    while not success and retries < 5:
+    max_retries = 5
+    
+    while not success and retries < max_retries:
         try:
             with open(img_path, "rb") as f:
                 image_bytes = f.read()
                 
             response = client.models.generate_content(
-                model='gemini-1.5-flash',
+                model='gemini-2.5-flash',
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
                     prompt
@@ -68,14 +70,15 @@ for idx, img_path in enumerate(image_paths, 1):
             print(f"[{idx}/{len(image_paths)}] {file_name} -> {detected}")
             results.append({"file": file_name, "result": detected})
             success = True
-            time.sleep(4.5)  # Giữ tốc độ an toàn (~13 req/min < 20 req/min)
+            time.sleep(4.5)  # Giữ khoảng cách an toàn tránh 429
         except Exception as e:
-            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                retries += 1
-                print(f"⚠️ Chờ khôi phục Rate Limit (thử lại {retries}/5 trong 30s)...")
+            retries += 1
+            err_str = str(e)
+            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                print(f"⚠️ Chờ khôi phục Rate Limit (thử lại {retries}/{max_retries} trong 30s)...")
                 time.sleep(30)
             else:
-                print(f"[{idx}/{len(image_paths)}] Lỗi xử lý {file_name}: {e}")
-                break
+                print(f"⚠️ Lỗi xử lý {file_name} (Thử lại {retries}/{max_retries} sau 5s)... Lỗi: {e}")
+                time.sleep(5)
 
 print("\nHoàn tất benchmark Gemini Vision!")
