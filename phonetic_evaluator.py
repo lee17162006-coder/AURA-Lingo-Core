@@ -1,14 +1,12 @@
 import torch
-import soundfile as sf
+import librosa
 import eng_to_ipa as ipa
 import Levenshtein
-import librosa 
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
-# Sử dụng mô hình Wav2Vec2 thuần Python (không dính eSpeak dependency)
 MODEL_NAME = "facebook/wav2vec2-base-960h"
 
-print("Đang khởi tạo mô hình Wav2Vec2 Speech-to-Text...")
+print("Đang khởi tạo mô hình Wav2Vec2...")
 processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
 model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
 
@@ -18,22 +16,16 @@ def get_target_ipa(word: str) -> str:
     return res.replace("*", "").replace("ˈ", "").replace("ˌ", "")
 
 def audio_to_ipa(audio_path: str) -> str:
-    """Giải mã file âm thanh (.wav) người dùng đọc thành chuỗi IPA dự đoán"""
-    # Đọc âm thanh và ép buộc resample trực tiếp về 16000Hz
+    """Giải mã file âm thanh (.wav) và resample tự động về 16kHz"""
     speech, sample_rate = librosa.load(audio_path, sr=16000)
-    
-    # Tiền xử lý dữ liệu âm thanh
     input_values = processor(speech, sampling_rate=16000, return_tensors="pt").input_values
     
-    # Dự đoán ký tự văn bản bằng Wav2Vec2
     with torch.no_grad():
         logits = model(input_values).logits
     predicted_ids = torch.argmax(logits, dim=-1)
     transcription = processor.batch_decode(predicted_ids)[0].lower()
     
-    # Chuyển đổi văn bản nhận diện được sang IPA
-    spoken_ipa = get_target_ipa(transcription)
-    return spoken_ipa
+    return get_target_ipa(transcription)
 
 def calculate_ipa_similarity(target_ipa: str, spoken_ipa: str) -> float:
     """Tính độ tương đồng IPA (%) dựa trên Levenshtein Distance"""
@@ -44,38 +36,81 @@ def calculate_ipa_similarity(target_ipa: str, spoken_ipa: str) -> float:
     similarity = (1 - distance / max_len) * 100
     return round(similarity, 2)
 
-def evaluate_speech_file(target_word: str, audio_path: str):
+def diagnose_vietnamese_phonetic_errors(target_ipa: str, spoken_ipa: str) -> list:
     """
-    Hàm tổng hợp: Đánh giá file âm thanh thực tế với từ mục tiêu
-    - Bắt lỗi rụng âm cuối (/s/, /t/, /z/)
-    - Tính điểm tương đồng IPA
+    BỘ LUẬT PHÂN LOẠI LỖI NGỮ ÂM NGƯỜI VIỆT (Tích hợp từ tài liệu Thành viên 2)
     """
-    target_ipa = get_target_ipa(target_word)
-    spoken_ipa = audio_to_ipa(audio_path)
-    similarity_score = calculate_ipa_similarity(target_ipa, spoken_ipa)
-    
-    print(f"\n--- KẾT QUẢ ĐÁNH GIÁ PHÁT ÂM ---")
-    print(f"Từ mục tiêu:      {target_word}")
-    print(f"IPA mục tiêu:     /{target_ipa}/")
-    print(f"IPA nhận diện:    /{spoken_ipa}/")
-    print(f"Độ chính xác:     {similarity_score}%")
-    
-    # Bắt lỗi rụng phụ âm cuối
-    critical_ending_sounds = ['s', 't', 'z']
     errors = []
-    
-    if target_ipa:
-        last_char_target = target_ipa[-1]
-        if last_char_target in critical_ending_sounds:
-            if not spoken_ipa.endswith(last_char_target) and last_char_target not in spoken_ipa[-2:]:
-                errors.append(f"Thiếu phụ âm cuối /{last_char_target}/ (Final Consonant Dropping)")
+    if not target_ipa or not spoken_ipa:
+        return errors
 
-    if errors:
-        print("\n❌ Lỗi ngữ âm phát hiện:")
-        for err in errors:
-            print(f" - {err}")
-    else:
-        print("\n✅ Phát âm chuẩn hoặc không phát hiện lỗi rụng âm cuối nghiêm trọng.")
+    # --- 1. NHÓM LỖI ÂM TH/ (/θ/ và /ð/) ---
+    if 'θ' in target_ipa and 'θ' not in spoken_ipa:
+        if 't' in spoken_ipa:
+            errors.append("Đọc /θ/ (th) thành âm tắc /t/ (VD: think -> tink)")
+        elif 's' in spoken_ipa:
+            errors.append("Đọc /θ/ (th) thành âm xát /s/ (VD: think -> sink)")
+        elif 'f' in spoken_ipa:
+            errors.append("Đọc /θ/ (th) thành âm môi-răng /f/")
+        elif 'd' in spoken_ipa:
+            errors.append("Đọc /θ/ (th) thành âm hữu thanh /d/")
+        else:
+            errors.append("Bỏ hoàn toàn âm /θ/ (th) trong từ")
 
-if __name__ == "__main__":
-    print("Module Phonetic Evaluator (Audio File Input) đã sẵn sàng.")
+    if 'ð' in target_ipa and 'ð' not in spoken_ipa:
+        if 'd' in spoken_ipa:
+            errors.append("Đọc /ð/ (th) thành âm tắc /d/ (VD: this -> dis)")
+        elif 'z' in spoken_ipa:
+            errors.append("Đọc /ð/ (th) thành âm xát /z/")
+        elif 't' in spoken_ipa:
+            errors.append("Đọc /ð/ (th) thành âm vô thanh /t/")
+        elif 'θ' in spoken_ipa:
+            errors.append("Đọc /ð/ (th) thành âm vô thanh /θ/")
+        else:
+            errors.append("Bỏ hoàn toàn âm /ð/ (th) trong từ")
+
+    # --- 2. NHÓM LỖI PHỤ ÂM RÂNG - MÔI - LƯỠI (/r/, /l/, /ʃ/, /s/, /f/, /v/) ---
+    if 'r' in target_ipa and 'r' not in spoken_ipa and 'l' in spoken_ipa:
+        errors.append("Đọc âm /r/ thành âm bên lợi /l/")
+    if 'l' in target_ipa and 'l' not in spoken_ipa and 'r' in spoken_ipa:
+        errors.append("Đọc âm /l/ thành âm /r/")
+
+    if 'ʃ' in target_ipa and 'ʃ' not in spoken_ipa and 's' in spoken_ipa:
+        errors.append("Đọc âm xát sau lợi /ʃ/ (sh) thành âm xát lợi /s/")
+    if 's' in target_ipa and 's' not in spoken_ipa and 'ʃ' in spoken_ipa:
+        errors.append("Đọc âm xát lợi /s/ thành âm xát sau lợi /ʃ/ (sh)")
+
+    if 'f' in target_ipa and 'f' not in spoken_ipa and 'p' in spoken_ipa:
+        errors.append("Đọc âm môi-răng /f/ thành âm tắc hai môi /p/")
+    if 'v' in target_ipa and 'v' not in spoken_ipa:
+        if 'w' in spoken_ipa:
+            errors.append("Đọc âm môi-răng /v/ thành âm tròn môi /w/")
+        elif 'b' in spoken_ipa:
+            errors.append("Đọc âm môi-răng /v/ thành âm tắc hai môi /b/")
+
+    # --- 3. NHÓM LỖI BỎ ÂM CUỐI VÀ VÔ THANH HÓA ÂM CUỐI (Final Consonants) ---
+    final_consonants = ['p', 't', 'k', 'b', 'd', 'g', 'f', 'v', 's', 'z', 'ʃ', 'tʃ', 'dʒ']
+    target_end = target_ipa[-1] if target_ipa else ""
+    spoken_end = spoken_ipa[-1] if spoken_ipa else ""
+
+    if target_end in final_consonants:
+        # Check bỏ âm cuối
+        if not spoken_ipa.endswith(target_end) and target_end not in spoken_ipa[-2:]:
+            errors.append(f"Rụng phụ âm cuối /{target_end}/ (Final Consonant Dropping)")
+        # Check vô thanh hóa âm cuối (Devoicing)
+        elif target_end == 'z' and spoken_end == 's':
+            errors.append("Vô thanh hóa âm cuối: Đọc /z/ cuối từ thành /s/")
+        elif target_end == 'd' and spoken_end == 't':
+            errors.append("Vô thanh hóa âm cuối: Đọc /d/ cuối từ thành /t/")
+        elif target_end == 'g' and spoken_end == 'k':
+            errors.append("Vô thanh hóa âm cuối: Đọc /g/ cuối từ thành /k/")
+        elif target_end == 'v' and spoken_end == 'f':
+            errors.append("Vô thanh hóa âm cuối: Đọc /v/ cuối từ thành /f/")
+
+    # --- 4. NHÓM LỖI NGUYÊN ÂM ĐÔI THÀNH NGUYÊN ÂM ĐƠN ---
+    diphthongs = ['eɪ', 'aɪ', 'ɔɪ', 'aʊ', 'əʊ', 'oʊ']
+    for d in diphthongs:
+        if d in target_ipa and d not in spoken_ipa:
+            errors.append(f"Đơn giản hóa nguyên âm đôi /{d}/ thành nguyên âm đơn")
+
+    return errors
