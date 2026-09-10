@@ -4,11 +4,17 @@ import eng_to_ipa as ipa
 import Levenshtein
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
+import streamlit as st
+
 MODEL_NAME = "facebook/wav2vec2-base-960h"
 
-print("Đang khởi tạo mô hình Wav2Vec2...")
-processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
-model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
+@st.cache_resource
+def load_wav2vec2():
+    processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
+    model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
+    return processor, model
+
+processor, model = load_wav2vec2()
 
 def get_target_ipa(word: str) -> str:
     """Lấy chuỗi IPA chuẩn của từ từ eng-to-ipa"""
