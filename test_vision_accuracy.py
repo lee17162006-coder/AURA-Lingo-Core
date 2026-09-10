@@ -66,6 +66,6 @@ for idx, img_path in enumerate(image_paths, 1):
         results.append({"file": file_name, "result": detected})
         time.sleep(0.2)  # Xử lý siêu tốc cho tài khoản trả phí
     except Exception as e:
-        print(f"❌ Lỗi xử lý {file_name}: {e}")
+        print(f"Lỗi xử lý {file_name}: {e}")
 
 print("\n Hoàn tất benchmark Gemini Vision!")

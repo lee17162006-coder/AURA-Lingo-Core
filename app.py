@@ -32,7 +32,7 @@ st.set_page_config(
 )
 
 # --- TIÊU ĐỀ ỨNG DỤNG ---
-st.title("🎙️ AURA-Lingo: Multi-modal Phonetic Evaluator")
+st.title("AURA-Lingo: Multi-modal Phonetic Evaluator")
 st.caption("Hệ thống nhận diện đồ vật qua Camera và chấm điểm phát âm tiếng Anh chuẩn IPA")
 
 # Tách giao diện làm 2 cột
@@ -46,10 +46,10 @@ with col_vision:
     if camera_image:
         image = Image.open(camera_image)
         st.image(image, caption="Ảnh đã chụp", use_container_width=True)
-        
-        if st.button("🔍 Nhận diện từ vựng (Gemini)", type="primary"):
+
+        if st.button("Nhận diện từ vựng (Gemini)", type="primary"):
             if not client:
-                st.error("Chưa cấu hình GEMINI_API_KEY trong file .env!")
+                st.error("Chưa cấu hình GEMINI_API_KEY trong file .env")
             else:
                 with st.spinner("Gemini đang phân tích hình ảnh..."):
                     try:
@@ -59,27 +59,29 @@ with col_vision:
                         image.save(img_byte_arr, format='JPEG')
                         img_bytes = img_byte_arr.getvalue()
 
-                        prompt = "Identify the main object in this image. Return ONLY the English noun for the object, in lowercase, with no extra punctuation or text (e.g., 'cat', 'book', 'apple')."
-                        
+                        prompt = "Identify the main object in this image. Return ONLY the English word."
+
                         response = client.models.generate_content(
-                            model='gemini-3.6-flash',
+                            model='gemini-2.5-flash',
                             contents=[
-                                types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                                types.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'),
                                 prompt
                             ]
                         )
-                        detected_word = response.text.strip().lower()
-            st.session_state['detected_word'] = detected_word
-            st.success(f"Từ vựng nhận diện được: **{detected_word}**")
 
-            # Tự động phát âm thanh mẫu cho người khiếm thị
-            audio_path = os.path.join("assets", "audio", f"{detected_word}.mp3")
-            if os.path.exists(audio_path):
-                st.audio(audio_path, format="audio/mp3", autoplay=True)
-            else:
-                st.warning(f"⚠️ Chưa có file audio cho '{detected_word}'")
-        except Exception as e:
-            st.error(f"Lỗi Gemini Vision: {e}")
+                        detected_word = response.text.strip().lower()
+                        st.session_state['detected_word'] = detected_word
+                        st.success(f"Từ vựng nhận diện được: **{detected_word}**")
+
+                        # Tự động phát âm thanh mẫu cho người khiếm thị
+                        audio_path = os.path.join("assets", "audio", f"{detected_word}.mp3")
+                        if os.path.exists(audio_path):
+                            st.audio(audio_path, format="audio/mp3", autoplay=True)
+                        else:
+                            st.warning(f"Chưa có file audio cho '{detected_word}'")
+
+                    except Exception as e:
+                        st.error(f"Lỗi Gemini Vision: {e}")
 # Mặc định chọn từ vựng nếu đã nhận diện hoặc cho phép nhập tay
 target_word = st.text_input(
     "Từ mục tiêu cần luyện đọc:",
@@ -100,7 +102,7 @@ with col_audio:
         if os.path.exists(audio_file_path):
             st.audio(audio_file_path, format="audio/mp3", autoplay=True)
         else:
-            st.warning(f"⚠️ Chưa có audio mẫu cho từ '{target_word}'")
+            st.warning(f"Chưa có audio mẫu cho từ '{target_word}'")
 
         st.write("Nhấn vào biểu tượng Micro bên dưới để bắt đầu ghi âm:")
         audio_bytes = audio_recorder(
@@ -124,7 +126,7 @@ with col_audio:
                 spoken_ipa = audio_to_ipa(temp_wav_path)
                 similarity = calculate_ipa_similarity(target_ipa, spoken_ipa)
 
-                st.subheader("📊 Kết quả Phân tích Ngữ âm")
+                st.subheader("Kết quả Phân tích Ngữ âm")
                 st.metric(label="Độ chính xác IPA", value=f"{similarity}%")
 
                 col_res1, col_res2 = st.columns(2)
@@ -141,7 +143,7 @@ with col_audio:
                     for err in errors:
                         st.write(f"- {err}")
                 else:
-                    st.success("✅ Phát âm tốt! Không phát hiện lỗi đặc trưng người Việt.")
+                    st.success("Phát âm tốt! Không phát hiện lỗi đặc trưng người Việt.")
 
             except Exception as e:
                 st.error(f"Lỗi khi phân tích âm thanh: {e}")
