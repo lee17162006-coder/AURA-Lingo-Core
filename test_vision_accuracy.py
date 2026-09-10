@@ -36,7 +36,7 @@ for ext in image_extensions:
     image_paths.extend(glob.glob(os.path.join(IMAGE_DIR, ext.upper())))
 
 image_paths = sorted(list(set(image_paths)))
-print(f"Tìm thấy {len(image_paths)} ảnh. Bắt đầu benchmark chuẩn hóa từ vựng A1...\n")
+print(f"Tìm thấy {len(image_paths)} ảnh. Bắt đầu benchmark siêu tốc với Pay-as-you-go...\n")
 
 prompt = f"""Bạn là trợ lý thị giác AURA-Lingo. 
 Xác định đồ vật chính trong ảnh và ƯU TIÊN chọn 1 từ đơn giản nhất thuộc danh sách từ vựng A1 sau:
@@ -50,35 +50,22 @@ results = []
 for idx, img_path in enumerate(image_paths, 1):
     file_name = os.path.basename(img_path)
     
-    success = False
-    retries = 0
-    max_retries = 5
-    
-    while not success and retries < max_retries:
-        try:
-            with open(img_path, "rb") as f:
-                image_bytes = f.read()
-                
-            response = client.models.generate_content(
-                model='gemini-2.5-flash',
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                    prompt
-                ]
-            )
-            detected = response.text.strip()
-            print(f"[{idx}/{len(image_paths)}] {file_name} -> {detected}")
-            results.append({"file": file_name, "result": detected})
-            success = True
-            time.sleep(4.5)  # Giữ khoảng cách an toàn tránh 429
-        except Exception as e:
-            retries += 1
-            err_str = str(e)
-            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                print(f"⚠️ Chờ khôi phục Rate Limit (thử lại {retries}/{max_retries} trong 30s)...")
-                time.sleep(30)
-            else:
-                print(f"⚠️ Lỗi xử lý {file_name} (Thử lại {retries}/{max_retries} sau 5s)... Lỗi: {e}")
-                time.sleep(5)
+    try:
+        with open(img_path, "rb") as f:
+            image_bytes = f.read()
+            
+        response = client.models.generate_content(
+            model='gemini-3.6-flash',
+            contents=[
+                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                prompt
+            ]
+        )
+        detected = response.text.strip()
+        print(f"[{idx}/{len(image_paths)}] {file_name} -> {detected}")
+        results.append({"file": file_name, "result": detected})
+        time.sleep(0.2)  # Xử lý siêu tốc cho tài khoản trả phí
+    except Exception as e:
+        print(f"❌ Lỗi xử lý {file_name}: {e}")
 
-print("\nHoàn tất benchmark Gemini Vision!")
+print("\n Hoàn tất benchmark Gemini Vision!")
