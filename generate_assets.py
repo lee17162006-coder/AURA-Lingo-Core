@@ -2,53 +2,46 @@ import os
 import pandas as pd
 from gtts import gTTS
 
-OUTPUT_DIR = "assets/audio"
-EXCEL_PATH = "500 từ vựng tiếng anh A1.xlsx"
+# Tạo thư mục lưu trữ nếu chưa có
+AUDIO_DIR = os.path.join("assets", "audio")
+os.makedirs(AUDIO_DIR, exist_ok=True)
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Đường dẫn file Excel chứa 500 từ vựng
+EXCEL_FILE = "500 từ vựng tiếng anh A1.xlsx"
 
-def generate_audio_from_excel():
-    if not os.path.exists(EXCEL_PATH):
-        print(f"Lỗi: Không tìm thấy file '{EXCEL_PATH}' trong thư mục dự án!")
+def generate_audio_assets():
+    if not os.path.exists(EXCEL_FILE):
+        print(f"Không tìm thấy file {EXCEL_FILE}")
         return
 
-    # Đọc dữ liệu từ file Excel
-    df = pd.read_excel(EXCEL_PATH)
+    # Đọc dữ liệu từ Excel
+    df = pd.read_excel(EXCEL_FILE)
     
-    # Tìm cột chứa từ vựng tiếng Anh
-    word_column = None
-    for col in df.columns:
-        if str(col).strip().lower() in ['word', 'words', 'từ vựng', 'tu_vung', 'từ']:
-            word_column = col
-            break
+    # Giả định cột đầu tiên chứa từ tiếng Anh (hoặc điều chỉnh tên cột cho đúng)
+    word_column = df.columns[0] 
+    
+    print("Đang khởi tạo bộ 500 file Audio Pre-render...")
+    count = 0
 
-    if not word_column:
-        word_column = df.columns[0] # Lấy cột đầu tiên nếu không tìm thấy đúng tên
-
-    vocab_list = df[word_column].dropna().astype(str).str.strip().tolist()
-    print(f"Đã tìm thấy {len(vocab_list)} từ vựng. Bắt đầu pre-render audio...")
-
-    count_new = 0
-    for word in vocab_list:
-        clean_word = word.lower().strip()
-        # Bỏ qua dòng tiêu đề nếu bị lẫn vào
-        if clean_word in ['word', 'từ vựng', 'tu_vung']:
+    for idx, row in df.iterrows():
+        word = str(row[word_column]).strip().lower()
+        if not word or pd.isna(word):
             continue
-            
-        file_path = os.path.join(OUTPUT_DIR, f"{clean_word}.mp3")
-        
+
+        # Đặt tên file chuẩn hóa theo từ vựng (ví dụ: apple.mp3)
+        file_path = os.path.join(AUDIO_DIR, f"{word}.mp3")
+
+        # Skip nếu file đã tồn tại để tiết kiệm thời gian
         if not os.path.exists(file_path):
             try:
-                tts = gTTS(text=clean_word, lang='en', slow=False)
+                tts = gTTS(text=word, lang='en', slow=False)
                 tts.save(file_path)
-                count_new += 1
-                print(f"-> Đã tạo mới: {file_path}")
+                count += 1
+                print(f"[{count}] Đã tạo: {word}.mp3")
             except Exception as e:
-                print(f"-> Lỗi khi tạo audio cho từ '{clean_word}': {e}")
-        else:
-            print(f"-> Đã có sẵn: {file_path}")
+                print(f"⚠️ Lỗi khi tạo audio cho từ '{word}': {e}")
 
-    print(f"\nHoàn tất! Đã xử lý toàn bộ danh sách {len(vocab_list)} từ.")
+    print(f"\nHoàn tất! Đã khởi tạo thành công bộ file audio trong {AUDIO_DIR}")
 
 if __name__ == "__main__":
-    generate_audio_from_excel()
+    generate_audio_assets()
