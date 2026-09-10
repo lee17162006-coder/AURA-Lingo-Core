@@ -1,54 +1,46 @@
-import os
 import torch
-import torchaudio
-from transformers import Wav2Vec2ForCTC, Wav2Vec2FeatureExtractor, Wav2Vec2CTCTokenizer
-from dotenv import load_dotenv
+import eng_to_ipa as ipa
+from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
-# Tải biến môi trường từ file .env
-load_dotenv()
+# Sử dụng model Wav2Vec2 IPA nhẹ, chạy trực tiếp không phụ thuộc backend C++
+MODEL_NAME = "facebook/wav2vec2-lv-60-espeak-cv-ft"
 
-class PhoneticEvaluator:
-    def __init__(self, model_name="facebook/wav2vec2-xlsr-53-espeak-cv-ft"):
-        """Khởi tạo mô hình Wav2Vec2 chấm điểm IPA"""
-        print("Đang tải mô hình Wav2Vec2...")
-        self.tokenizer = Wav2Vec2CTCTokenizer.from_pretrained(model_name)
-        self.feature_extractor = Wav2Vec2FeatureExtractor(
-            feature_size=1, 
-            sampling_rate=16000, 
-            padding_value=0.0, 
-            do_normalize=True, 
-            return_attention_mask=False
-        )
-        self.model = Wav2Vec2ForCTC.from_pretrained(model_name)
-        self.model.eval()
-        print("Mô hình Wav2Vec2 đã sẵn sàng!")
+print("Đang khởi tạo mô hình Wav2Vec2 IPA...")
+processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
+model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
 
-    def evaluate_audio(self, audio_path, target_ipa):
-        """
-        Đọc file âm thanh người dùng nói và so sánh chuỗi IPA với chuỗi chuẩn
-        """
-        waveform, sample_rate = torchaudio.load(audio_path)
+def get_target_ipa(word: str) -> str:
+    """Lấy chuỗi IPA chuẩn của từ từ CMUdict/eng-to-ipa"""
+    res = ipa.convert(word)
+    return res.replace("*", "").replace("ˈ", "").replace("ˌ", "")
 
-        # Chuyển đổi sample rate về 16kHz nếu cần
-        if sample_rate != 16000:
-            resampler = torchaudio.transforms.Resample(orig_freq=sample_rate, new_freq=16000)
-            waveform = resampler(waveform)
+def evaluate_final_consonants(target_word: str, spoken_ipa: str):
+    """Đối chiếu IPA thu được với IPA chuẩn và chẩn đoán lỗi rụng âm cuối (/s/, /t/, /z/)"""
+    target_ipa = get_target_ipa(target_word)
+    
+    print(f"\n--- PHÂN TÍCH NGỮ ÂM ---")
+    print(f"Từ mục tiêu:  {target_word}")
+    print(f"IPA chuẩn:    /{target_ipa}/")
+    print(f"IPA đọc được: /{spoken_ipa}/")
+    
+    critical_ending_sounds = ['s', 't', 'z']
+    errors = []
+    
+    if target_ipa:
+        last_char_target = target_ipa[-1]
+        if last_char_target in critical_ending_sounds:
+            if not spoken_ipa.endswith(last_char_target) and last_char_target not in spoken_ipa[-2:]:
+                errors.append(f"Thiếu âm cuối /{last_char_target}/ (Final Consonant Dropping)")
 
-        input_values = self.feature_extractor(waveform.squeeze().numpy(), return_tensors="pt", sampling_rate=16000).input_values
-        with torch.no_grad():
-            logits = self.model(input_values).logits
-
-        predicted_ids = torch.argmax(logits, dim=-1)
-        predicted_ipa = self.tokenizer.batch_decode(predicted_ids)[0]
-
-        is_matched = predicted_ipa.strip() == target_ipa.strip()
-        
-        return {
-            "predicted_ipa": predicted_ipa,
-            "target_ipa": target_ipa,
-            "is_matched": is_matched
-        }
+    if errors:
+        print("\n❌ Phát hiện lỗi ngữ âm:")
+        for err in errors:
+            print(f" - {err}")
+    else:
+        print("\n✅ Phát âm chuẩn hoặc không phát hiện lỗi rụng âm cuối nghiêm trọng!")
 
 if __name__ == "__main__":
-    evaluator = PhoneticEvaluator()
-    print("Khởi tạo module thành công!")
+    print("Mô hình đã sẵn sàng. Chạy thử nghiệm đối chiếu IPA:")
+    # Giả lập 2 trường hợp người học đọc từ "cats" (/kæts/)
+    evaluate_final_consonants("cats", "kæt")   # Test đọc thiếu âm /s/
+    evaluate_final_consonants("cats", "kæts")  # Test đọc chuẩn
