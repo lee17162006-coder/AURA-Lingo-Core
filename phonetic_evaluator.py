@@ -2,6 +2,7 @@ import torch
 import soundfile as sf
 import eng_to_ipa as ipa
 import Levenshtein
+import librosa 
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
 # Sử dụng mô hình Wav2Vec2 thuần Python (không dính eSpeak dependency)
@@ -18,19 +19,19 @@ def get_target_ipa(word: str) -> str:
 
 def audio_to_ipa(audio_path: str) -> str:
     """Giải mã file âm thanh (.wav) người dùng đọc thành chuỗi IPA dự đoán"""
-    # 1. Đọc file âm thanh
-    speech, sample_rate = sf.read(audio_path)
+    # Đọc âm thanh và ép buộc resample trực tiếp về 16000Hz
+    speech, sample_rate = librosa.load(audio_path, sr=16000)
     
-    # 2. Tiền xử lý dữ liệu âm thanh (chuẩn hóa về 16kHz)
-    input_values = processor(speech, sampling_rate=sample_rate, return_tensors="pt").input_values
+    # Tiền xử lý dữ liệu âm thanh
+    input_values = processor(speech, sampling_rate=16000, return_tensors="pt").input_values
     
-    # 3. Dự đoán ký tự văn bản bằng Wav2Vec2
+    # Dự đoán ký tự văn bản bằng Wav2Vec2
     with torch.no_grad():
         logits = model(input_values).logits
     predicted_ids = torch.argmax(logits, dim=-1)
     transcription = processor.batch_decode(predicted_ids)[0].lower()
     
-    # 4. Chuyển đổi văn bản nhận diện được sang IPA
+    # Chuyển đổi văn bản nhận diện được sang IPA
     spoken_ipa = get_target_ipa(transcription)
     return spoken_ipa
 
