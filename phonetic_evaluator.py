@@ -2,15 +2,15 @@ import torch
 import eng_to_ipa as ipa
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor
 
-# Sử dụng model Wav2Vec2 IPA nhẹ, chạy trực tiếp không phụ thuộc backend C++
-MODEL_NAME = "facebook/wav2vec2-lv-60-espeak-cv-ft"
+# Sử dụng model Wav2Vec2 thuần Python, không phụ thuộc backend eSpeak C++
+MODEL_NAME = "facebook/wav2vec2-base-960h"
 
-print("Đang khởi tạo mô hình Wav2Vec2 IPA...")
+print("Đang khởi tạo mô hình Wav2Vec2...")
 processor = Wav2Vec2Processor.from_pretrained(MODEL_NAME)
 model = Wav2Vec2ForCTC.from_pretrained(MODEL_NAME)
 
 def get_target_ipa(word: str) -> str:
-    """Lấy chuỗi IPA chuẩn của từ từ CMUdict/eng-to-ipa"""
+    """Lấy chuỗi IPA chuẩn của từ từ eng-to-ipa"""
     res = ipa.convert(word)
     return res.replace("*", "").replace("ˈ", "").replace("ˌ", "")
 
