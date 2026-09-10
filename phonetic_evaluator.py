@@ -94,10 +94,8 @@ def diagnose_vietnamese_phonetic_errors(target_ipa: str, spoken_ipa: str) -> lis
     spoken_end = spoken_ipa[-1] if spoken_ipa else ""
 
     if target_end in final_consonants:
-        # Check bỏ âm cuối
         if not spoken_ipa.endswith(target_end) and target_end not in spoken_ipa[-2:]:
             errors.append(f"Rụng phụ âm cuối /{target_end}/ (Final Consonant Dropping)")
-        # Check vô thanh hóa âm cuối (Devoicing)
         elif target_end == 'z' and spoken_end == 's':
             errors.append("Vô thanh hóa âm cuối: Đọc /z/ cuối từ thành /s/")
         elif target_end == 'd' and spoken_end == 't':
@@ -114,3 +112,11 @@ def diagnose_vietnamese_phonetic_errors(target_ipa: str, spoken_ipa: str) -> lis
             errors.append(f"Đơn giản hóa nguyên âm đôi /{d}/ thành nguyên âm đơn")
 
     return errors
+
+def evaluate_speech_file(target_word: str, audio_path: str):
+    """Hàm wrapper tương thích ngược"""
+    target_ipa = get_target_ipa(target_word)
+    spoken_ipa = audio_to_ipa(audio_path)
+    similarity_score = calculate_ipa_similarity(target_ipa, spoken_ipa)
+    errors = diagnose_vietnamese_phonetic_errors(target_ipa, spoken_ipa)
+    return target_ipa, spoken_ipa, similarity_score, errors
