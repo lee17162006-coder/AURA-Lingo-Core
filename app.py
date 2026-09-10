@@ -17,7 +17,7 @@ from phonetic_evaluator import (
     get_target_ipa,
     audio_to_ipa,
     calculate_ipa_similarity,
-    evaluate_speech_file
+    diagnose_vietnamese_phonetic_errors
 )
 from audio_recorder_streamlit import audio_recorder
 
@@ -110,31 +110,26 @@ with col_audio:
             try:
                 spoken_ipa = audio_to_ipa(temp_wav_path)
                 similarity = calculate_ipa_similarity(target_ipa, spoken_ipa)
-                
+
                 st.subheader("📊 Kết quả Phân tích Ngữ âm")
                 st.metric(label="Độ chính xác IPA", value=f"{similarity}%")
-                
+
                 col_res1, col_res2 = st.columns(2)
                 with col_res1:
-                    st.write(f"**IPA Chuẩn:** `/{target_ipa}/`")
+                    st.write(f"**IPA Chuẩn:** /{target_ipa}/")
                 with col_res2:
-                    st.write(f"**IPA Đọc được:** `/{spoken_ipa}/`")
+                    st.write(f"**IPA Đọc được:** /{spoken_ipa}/")
 
-                # Chẩn đoán lỗi phụ âm cuối
-                critical_ending_sounds = ['s', 't', 'z']
-                errors = []
-                if target_ipa:
-                    last_char_target = target_ipa[-1]
-                    if last_char_target in critical_ending_sounds:
-                        if not spoken_ipa.endswith(last_char_target) and last_char_target not in spoken_ipa[-2:]:
-                            errors.append(f"Thiếu phụ âm cuối /{last_char_target}/ (Final Consonant Dropping)")
+                # Chẩn đoán lỗi ngữ âm người Việt theo Bộ luật mới
+                errors = diagnose_vietnamese_phonetic_errors(target_ipa, spoken_ipa)
 
                 if errors:
-                    st.error("❌ Phát hiện lỗi phát âm:")
+                    st.error("❌ Phát hiện lỗi ngữ âm người Việt:")
                     for err in errors:
                         st.write(f"- {err}")
                 else:
-                    st.success("✅ Phát âm tốt! Không phát hiện lỗi rụng âm cuối nghiêm trọng.")
+                    st.success("✅ Phát âm tốt! Không phát hiện lỗi đặc trưng người Việt.")
+
             except Exception as e:
                 st.error(f"Lỗi khi phân tích âm thanh: {e}")
             finally:
